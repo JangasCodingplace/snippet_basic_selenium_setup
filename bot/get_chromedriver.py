@@ -1,8 +1,10 @@
 import os
 import requests
+import shutil
 import xml.etree.ElementTree as ET
 
 from sys import platform
+from getpass import getuser
 from urllib.request import urlretrieve
 from urllib.request import urlopen
 from time import sleep
@@ -10,10 +12,11 @@ from time import sleep
 from selenium import webdriver
 from selenium.common.exceptions import SessionNotCreatedException
 
-from .settings import (
+from .globals import (
     BASE_DIR,
     BOT_DIR,
     ASSETS_DIR,
+    CHROMIUM_SYSTEM_STRINGS
 )
 
 """
@@ -29,26 +32,6 @@ class ChromeDriverDownload:
     chrome_href = 'https://chromedriver.storage.googleapis.com/'
     namespace = 'http://doc.s3.amazonaws.com/2006-03-01'
     uri = '{%s}'%namespace
-
-
-    chromium_system_strings = {
-        'linux':{
-            'type':'linux64',
-            'driver':'chromedriver'
-        },
-        'linux2':{
-            'type':'linux64',
-            'driver':'chromedriver'
-        },
-        'darwin':{
-            'type':'mac64',
-            'driver':'chromedriver'
-        },
-        'win32':{
-            'type':'win32',
-            'driver':'chromedriver.exe'
-        }
-    }
 
     def get_driver_version_pathes(system_specific=True):
         """
@@ -73,7 +56,7 @@ class ChromeDriverDownload:
                 )
             ]
             if key.text.startswith(tuple(version_list)):
-                chrome_system_string = ChromeDriverDownload.chromium_system_strings[platform]['type']
+                chrome_system_string = ChromeDriverDownload.CHROMIUM_SYSTEM_STRINGS[platform]['zip_type']
                 platform_driver = f'chromedriver_{chrome_system_string}.zip'
                 if system_specific:
                     if key.text.endswith(platform_driver):
@@ -86,7 +69,7 @@ class ChromeDriverDownload:
     def download_and_unpack_chromedriver(download_url, dst=ASSETS_DIR):
         chrome_driver_dst = os.path.join(
             dst,
-            ChromeDriverDownload.chromium_system_strings[platform]['driver']
+            ChromeDriverDownload.CHROMIUM_SYSTEM_STRINGS[platform]['driver']
         )
         zip_dst = os.path.join(
             dst,
@@ -102,6 +85,9 @@ class ChromeDriverDownload:
         Please Note: The Chromefile (for MacOS) is a UNIX File.
         It's difficult to execute it by Python.
         Therefor I implemented a system intern shell command.
+
+        Windows path is missing at the moment.
+        Therefor a standard Python Service can be used.
         """
         if platform in ['darwin', 'linux', 'linux2']:
             while not os.path.exists(chrome_driver_dst):
@@ -164,3 +150,25 @@ class ChromeDriverDownload:
                 return True
         
         raise ValueError('There is no valid Chromedriver for your current system. Please check if you installed Chrome.')
+
+class ChromeUserDir:
+    class MacOS:
+        chrome_user_dir = os.path.join(
+            '/'
+            'Users',
+            getuser(),
+            'Library',
+            'Application\ Support',
+            'Google',
+            'Chrome'
+        )
+    def copy_dir_to_dst(dst=ASSETS_DIR,clean_dst=True):
+        if clean_dst:
+            if os.path.exists(os.path.join(dst,'Chrome')):
+                shutil.rmtree(os.path.join(dst,'Chrome'))
+        if platform == 'darwin':
+            chrome_dir = ChromeUserDir.MacOS.chrome_user_dir
+        else:
+            raise ValueError('Not Supported Platform for Chrome individualization.')
+        # shutil.copytree(chrome_dir, os.path.join(dst,'Chrome'), symlinks=False, ignore=None)
+        os.system(f'cp -a {chrome_dir} {dst}')
